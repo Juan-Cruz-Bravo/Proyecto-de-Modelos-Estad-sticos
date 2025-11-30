@@ -1,0 +1,75 @@
+##regresion robusta
+#install.packages("roboustbase")
+#install.packages("MASS")
+#install.packages("caret")
+library(MASS)
+library(robustbase)
+library(caret)
+
+#llamar a la base de datos 
+attach(Boston)
+set.seed(70)
+
+#preparacion para entrenamiento
+index <- createDataPartition(Boston$medv, p = 0.7, list = FALSE)
+entre_datos <- Boston[index, ]
+teste_datos <- Boston[-index, ]
+
+#introduccion de outliers artificiales
+sucio <- entre_datos #copia de seguridad
+outliers <- sample(1:nrow(sucio), 5)
+outliers
+
+#valores extremos
+sucio$medv[outliers] <- sucio$medv[outliers] * 10
+#los valores alterados
+sucio$medv[outliers]
+
+#modelo ols sobre los datos sucios
+modelo_ols_sucio <- lm(medv ~ ., data = sucio)
+
+#modelo robusto sobre otra vez los datos sucios
+modelo_robusto_sucio <- rlm(medv ~., data = sucio, psi = psi.huber)
+
+#predicciones sobre los datos de prueba
+predic_ols <- predict(modelo_ols_sucio, newdata = teste_datos)
+predic_rob <- predict(modelo_robusto_sucio, newdata = teste_datos)
+
+#calcular RMSE
+rmse_ols <- sqrt(mean((teste_datos$medv - predic_ols)^2)) 
+rmse_rob <- sqrt(mean((teste_datos$medv - predic_rob)^2))
+round(rmse_ols, 4)
+round(rmse_rob, 4)
+
+#graficas
+par(mfrow = c(2,2))
+
+#residuos vs OLS
+plot(modelo_ols_sucio, which = 1, main = "residuos afectados por los outliers")
+
+#residuos vs robusto
+plot(fitted(modelo_robusto_sucio), resid(modelo_robusto_sucio),
+     main = "residuos mas estables", xlab = "valores ajustados",
+     ylab = "residuos")
+abline(h = 0, col = "green4")
+
+#0 a los outliers artificiales
+plot(modelo_robusto_sucio$w, type = "h", main = "peso asignado por RLM",
+     ylab = "peso de 0 a 1", xlab = "observaciones")
+#resaltando los outliers artificiales
+points(outliers, modelo_robusto_sucio$w[outliers], col = "blue4",
+       pch = 19, cex = 2)
+legend("bottomright", legend = "outliers artificlaes", col = "black", pch = 19)
+
+#grafico 2D simplificado
+fit_simple_ols <- lm(medv ~ rm, data = sucio)
+fit_simple_rob <- rlm(medv ~ rm, data = sucio)
+
+plot(sucio$rm, sucio$medv, main = "variables RM",
+     xlab = "Habitaciones (rm)", ylab = "Valor (medv)")
+points(sucio$rm[outliers], sucio$medv[outliers], 
+       col = "red", pch = 19, cex = 1.5) # resaltar outliers artificiales
+abline(fit_simple_ols, col = "blue", lwd = 2, lty = 2) # Línea OLS
+abline(fit_simple_rob, col = "green", lwd = 2)         # Línea Robusta
+legend("topleft", legend = c("OLS (Jalado por outliers)", "Robusta sin los outliers"),
+       col = c("blue", "green"), lty = c(2, 1), lwd = 2)
