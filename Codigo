@@ -1,1 +1,69 @@
+## regresion ridge
+#paqueterias necesarias
+#install.packages("MASS")
+#install.packages("glmnet")
+#install.packages("caret")
+library(MASS)
+library(glmnet)
+library(caret)
 
+#carga de la base de datos
+attach(Boston)
+
+#semilla para reproducibilidad
+set.seed(70)
+
+#division de la base de datos para entrenamiento
+index <- createDataPartition(Boston$medv, p = 0.7, list = FALSE)
+data_train <- Boston[index, ]
+data_test <- Boston[-index, ]
+
+#matriz de predicciones entrenadas
+x_train <- model.matrix(medv ~ ., data = data_train)[, -1]
+y_train <- data_train$medv
+
+#matriz de testeo
+x_test <- model.matrix(medv ~ ., data = data_test)[, -1]
+y_test <- data_test$medv
+
+#modelo OLS
+modelo_ols <- lm(medv ~ ., data = data_train)
+predic_ols <- predict(modelo_ols, newdata = data_test)
+rmse_ols <- sqrt(mean((y_test - predic_ols)^2))
+
+round(rmse_ols, 4)
+
+#regresion ridge
+modelo_ridge1 <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10)
+
+#lambdas
+lambdas <- modelo_ridge1$lambda.min
+#mejor lambda
+round(lambdas, 4)
+
+modelo_ridge2 <- glmnet(x_train, y_train, alpha = 0, lambda = lambdas)
+
+#grafico de validacion cruzada
+plot(modelo_ridge1)
+title("validacion cruzada", line = 2.5)
+
+#ajuste de un modelo para ver la evolucion de los lambdas
+evol_lamb <- glmnet(x_train, y_train, alpha = 0)
+plot(evol_lamb, xvar = "lambda", label = TRUE)
+title("evolucion de los lambdas", line = 2.5)
+
+#prediccion sobre los valores de prueba
+predict_ridge <- predict(modelo_ridge2, s = lambdas, newx = x_test)
+
+#RMSE para ridge
+rmse_ridge <- sqrt(mean((y_test - predict_ridge)^2))
+round(rmse_ridge, 4)
+
+#comparacion entre coeficients con respecto a OLS
+coef_ols <- coef(modelo_ols)
+coef_ridge <- coef(modelo_ridge2)
+
+#creacion de una tabla de mejor visualizacion
+
+comparacion <- data.frame(variable = rownames(coef_ridge), Coef_Ridge = as.vector(coef_ridge), Coef_OLS = as.vector(coef_ols))
+comparacion
